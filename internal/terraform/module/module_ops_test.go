@@ -35,6 +35,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/zclconf/go-cty-debug/ctydebug"
 	"github.com/zclconf/go-cty/cty"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestGetModuleDataFromRegistry_singleModule(t *testing.T) {
@@ -56,12 +57,12 @@ func TestGetModuleDataFromRegistry_singleModule(t *testing.T) {
 	}
 
 	fs := filesystem.NewFilesystem(ss.DocumentStore)
-	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +82,7 @@ func TestGetModuleDataFromRegistry_singleModule(t *testing.T) {
 	regClient.BaseURL = srv.URL
 	t.Cleanup(srv.Close)
 
-	err = GetModuleDataFromRegistry(ctx, regClient, ss.Modules, ss.RegistryModules, modPath)
+	err = GetModuleDataFromRegistry(ctx, regClient, ss.Modules, ss.RegistryModules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,12 +129,12 @@ func TestGetModuleDataFromRegistry_moduleNotFound(t *testing.T) {
 	}
 
 	fs := filesystem.NewFilesystem(ss.DocumentStore)
-	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +158,7 @@ func TestGetModuleDataFromRegistry_moduleNotFound(t *testing.T) {
 	regClient.BaseURL = srv.URL
 	t.Cleanup(srv.Close)
 
-	err = GetModuleDataFromRegistry(ctx, regClient, ss.Modules, ss.RegistryModules, modPath)
+	err = GetModuleDataFromRegistry(ctx, regClient, ss.Modules, ss.RegistryModules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err == nil {
 		t.Fatal("expected module data obtaining to return error")
 	}
@@ -207,12 +208,12 @@ func TestGetModuleDataFromRegistry_apiTimeout(t *testing.T) {
 	}
 
 	fs := filesystem.NewFilesystem(ss.DocumentStore)
-	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +239,7 @@ func TestGetModuleDataFromRegistry_apiTimeout(t *testing.T) {
 	regClient.BaseURL = srv.URL
 	t.Cleanup(srv.Close)
 
-	err = GetModuleDataFromRegistry(ctx, regClient, ss.Modules, ss.RegistryModules, modPath)
+	err = GetModuleDataFromRegistry(ctx, regClient, ss.Modules, ss.RegistryModules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err == nil {
 		t.Fatal("expected module data obtaining to return error")
 	}
@@ -501,12 +502,12 @@ func TestParseProviderVersions_multipleVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPathFirst)
+	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPathFirst, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// parse requirements first to enable schema obtaining later
-	err = LoadModuleMetadata(ctx, ss.Modules, modPathFirst)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPathFirst, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,12 +520,12 @@ func TestParseProviderVersions_multipleVersions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPathSecond)
+	err = ParseModuleConfiguration(ctx, fs, ss.Modules, modPathSecond, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	// parse requirements first to enable schema obtaining later
-	err = LoadModuleMetadata(ctx, ss.Modules, modPathSecond)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPathSecond, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -670,16 +671,16 @@ func TestPreloadEmbeddedSchema_basic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -740,16 +741,16 @@ func TestPreloadEmbeddedSchema_unknownProviderOnly(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -803,23 +804,23 @@ func TestPreloadEmbeddedSchema_idempotency(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// first
-	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// second - testing module state
-	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		if !errors.Is(err, job.StateNotChangedErr{Dir: document.DirHandleFromPath(modPath)}) {
 			t.Fatal(err)
@@ -828,7 +829,7 @@ func TestPreloadEmbeddedSchema_idempotency(t *testing.T) {
 
 	ctx = job.WithIgnoreState(ctx, true)
 	// third - testing requirement matching
-	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+	err = PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -882,11 +883,11 @@ func TestPreloadEmbeddedSchema_raceCondition(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath)
+	err = ParseModuleConfiguration(ctx, cfgFS, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = LoadModuleMetadata(ctx, ss.Modules, modPath)
+	err = LoadModuleMetadata(ctx, ss.Modules, modPath, trace.TraceID{}, trace.SpanID{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -895,14 +896,14 @@ func TestPreloadEmbeddedSchema_raceCondition(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		err := PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+		err := PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 		if err != nil && !errors.Is(err, job.StateNotChangedErr{Dir: document.DirHandleFromPath(modPath)}) {
 			t.Error(err)
 		}
 	}()
 	go func() {
 		defer wg.Done()
-		err := PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath)
+		err := PreloadEmbeddedSchema(ctx, log.Default(), schemasFS, ss.Modules, ss.ProviderSchemas, modPath, trace.TraceID{}, trace.SpanID{})
 		if err != nil && !errors.Is(err, job.StateNotChangedErr{Dir: document.DirHandleFromPath(modPath)}) {
 			t.Error(err)
 		}

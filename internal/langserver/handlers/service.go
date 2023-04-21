@@ -34,6 +34,7 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/terraform/discovery"
 	"github.com/hashicorp/terraform-ls/internal/terraform/exec"
 	"github.com/hashicorp/terraform-ls/internal/walker"
+	"go.opentelemetry.io/otel"
 )
 
 type service struct {
@@ -147,6 +148,9 @@ func (svc *service) Assigner() (jrpc2.Assigner, error) {
 			return handle(ctx, req, svc.Initialized)
 		},
 		"textDocument/didChange": func(ctx context.Context, req *jrpc2.Request) (interface{}, error) {
+			ctx, span := otel.Tracer(tracerName).Start(ctx, "service_textDocument_didChange")
+			defer span.End()
+
 			err := session.CheckInitializationIsConfirmed()
 			if err != nil {
 				return nil, err
@@ -587,6 +591,9 @@ const requestCancelled jrpc2.Code = -32800
 
 // handle calls a jrpc2.Func compatible function
 func handle(ctx context.Context, req *jrpc2.Request, fn interface{}) (interface{}, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "service_handler")
+	defer span.End()
+	
 	result, err := rpch.New(fn)(ctx, req)
 	if ctx.Err() != nil && errors.Is(ctx.Err(), context.Canceled) {
 		err = fmt.Errorf("%w: %s", requestCancelled.Err(), err)

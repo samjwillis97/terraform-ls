@@ -12,9 +12,10 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/terraform/exec"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
 	op "github.com/hashicorp/terraform-ls/internal/terraform/module/operation"
+	"go.opentelemetry.io/otel/trace"
 )
 
-func (idx *Indexer) DocumentOpened(modHandle document.DirHandle) (job.IDs, error) {
+func (idx *Indexer) DocumentOpened(ctx context.Context, modHandle document.DirHandle) (job.IDs, error) {
 	mod, err := idx.modStore.ModuleByPath(modHandle.Path())
 	if err != nil {
 		return nil, err
@@ -43,7 +44,7 @@ func (idx *Indexer) DocumentOpened(modHandle document.DirHandle) (job.IDs, error
 	parseId, err := idx.jobStore.EnqueueJob(job.Job{
 		Dir: modHandle,
 		Func: func(ctx context.Context) error {
-			return module.ParseModuleConfiguration(ctx, idx.fs, idx.modStore, modHandle.Path())
+			return module.ParseModuleConfiguration(ctx, idx.fs, idx.modStore, modHandle.Path(), trace.TraceID{}, trace.SpanID{})
 		},
 		Type:        op.OpTypeParseModuleConfiguration.String(),
 		IgnoreState: true,
@@ -53,7 +54,7 @@ func (idx *Indexer) DocumentOpened(modHandle document.DirHandle) (job.IDs, error
 	}
 	ids = append(ids, parseId)
 
-	modIds, err := idx.decodeModule(modHandle, job.IDs{parseId}, true)
+	modIds, err := idx.decodeModule(ctx, modHandle, job.IDs{parseId}, true)
 	if err != nil {
 		return ids, err
 	}
@@ -62,7 +63,7 @@ func (idx *Indexer) DocumentOpened(modHandle document.DirHandle) (job.IDs, error
 	parseVarsId, err := idx.jobStore.EnqueueJob(job.Job{
 		Dir: modHandle,
 		Func: func(ctx context.Context) error {
-			return module.ParseVariables(ctx, idx.fs, idx.modStore, modHandle.Path())
+			return module.ParseVariables(ctx, idx.fs, idx.modStore, modHandle.Path(), trace.TraceID{}, trace.SpanID{})
 		},
 		Type:        op.OpTypeParseVariables.String(),
 		IgnoreState: true,
@@ -75,7 +76,7 @@ func (idx *Indexer) DocumentOpened(modHandle document.DirHandle) (job.IDs, error
 	varsRefsId, err := idx.jobStore.EnqueueJob(job.Job{
 		Dir: modHandle,
 		Func: func(ctx context.Context) error {
-			return module.DecodeVarsReferences(ctx, idx.modStore, idx.schemaStore, modHandle.Path())
+			return module.DecodeVarsReferences(ctx, idx.modStore, idx.schemaStore, modHandle.Path(), trace.TraceID{}, trace.SpanID{})
 		},
 		Type:      op.OpTypeDecodeVarsReferences.String(),
 		DependsOn: job.IDs{parseVarsId},

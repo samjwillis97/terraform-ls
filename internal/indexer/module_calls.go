@@ -13,6 +13,7 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/schemas"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
 	op "github.com/hashicorp/terraform-ls/internal/terraform/module/operation"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func (idx *Indexer) decodeInstalledModuleCalls(modHandle document.DirHandle, ignoreState bool) (job.IDs, error) {
@@ -47,7 +48,7 @@ func (idx *Indexer) decodeInstalledModuleCalls(modHandle document.DirHandle, ign
 		parseId, err := idx.jobStore.EnqueueJob(job.Job{
 			Dir: mcHandle,
 			Func: func(ctx context.Context) error {
-				return module.ParseModuleConfiguration(ctx, idx.fs, idx.modStore, mcPath)
+				return module.ParseModuleConfiguration(ctx, idx.fs, idx.modStore, mcPath, trace.TraceID{}, trace.SpanID{})
 			},
 			Type:        op.OpTypeParseModuleConfiguration.String(),
 			IgnoreState: ignoreState,
@@ -65,7 +66,7 @@ func (idx *Indexer) decodeInstalledModuleCalls(modHandle document.DirHandle, ign
 				Dir:  mcHandle,
 				Type: op.OpTypeLoadModuleMetadata.String(),
 				Func: func(ctx context.Context) error {
-					return module.LoadModuleMetadata(ctx, idx.modStore, mcPath)
+					return module.LoadModuleMetadata(ctx, idx.modStore, mcPath, trace.TraceID{}, trace.SpanID{})
 				},
 				DependsOn:   job.IDs{parseId},
 				IgnoreState: ignoreState,
@@ -77,10 +78,12 @@ func (idx *Indexer) decodeInstalledModuleCalls(modHandle document.DirHandle, ign
 				refCollectionDeps = append(refCollectionDeps, metaId)
 			}
 
+			// currentSpanId := span.SpanContext().SpanID()
+			// currentTraceId := span.SpanContext().TraceID()
 			eSchemaId, err := idx.jobStore.EnqueueJob(job.Job{
 				Dir: mcHandle,
 				Func: func(ctx context.Context) error {
-					return module.PreloadEmbeddedSchema(ctx, idx.logger, schemas.FS, idx.modStore, idx.schemaStore, mcPath)
+					return module.PreloadEmbeddedSchema(ctx, idx.logger, schemas.FS, idx.modStore, idx.schemaStore, mcPath, trace.TraceID{}, trace.SpanID{})
 				},
 				Type:        op.OpTypePreloadEmbeddedSchema.String(),
 				DependsOn:   job.IDs{metaId},
@@ -106,7 +109,7 @@ func (idx *Indexer) decodeInstalledModuleCalls(modHandle document.DirHandle, ign
 		varsParseId, err := idx.jobStore.EnqueueJob(job.Job{
 			Dir: mcHandle,
 			Func: func(ctx context.Context) error {
-				return module.ParseVariables(ctx, idx.fs, idx.modStore, mcPath)
+				return module.ParseVariables(ctx, idx.fs, idx.modStore, mcPath, trace.TraceID{}, trace.SpanID{})
 			},
 			Type:        op.OpTypeParseVariables.String(),
 			IgnoreState: ignoreState,
@@ -121,7 +124,7 @@ func (idx *Indexer) decodeInstalledModuleCalls(modHandle document.DirHandle, ign
 			varsRefId, err := idx.jobStore.EnqueueJob(job.Job{
 				Dir: mcHandle,
 				Func: func(ctx context.Context) error {
-					return module.DecodeVarsReferences(ctx, idx.modStore, idx.schemaStore, mcPath)
+					return module.DecodeVarsReferences(ctx, idx.modStore, idx.schemaStore, mcPath, trace.TraceID{}, trace.SpanID{})
 				},
 				Type:        op.OpTypeDecodeVarsReferences.String(),
 				DependsOn:   job.IDs{varsParseId},
@@ -146,7 +149,7 @@ func (idx *Indexer) collectReferences(modHandle document.DirHandle, dependsOn jo
 	id, err := idx.jobStore.EnqueueJob(job.Job{
 		Dir: modHandle,
 		Func: func(ctx context.Context) error {
-			return module.DecodeReferenceTargets(ctx, idx.modStore, idx.schemaStore, modHandle.Path())
+			return module.DecodeReferenceTargets(ctx, idx.modStore, idx.schemaStore, modHandle.Path(), trace.TraceID{}, trace.SpanID{})
 		},
 		Type:        op.OpTypeDecodeReferenceTargets.String(),
 		DependsOn:   dependsOn,
@@ -161,7 +164,7 @@ func (idx *Indexer) collectReferences(modHandle document.DirHandle, dependsOn jo
 	id, err = idx.jobStore.EnqueueJob(job.Job{
 		Dir: modHandle,
 		Func: func(ctx context.Context) error {
-			return module.DecodeReferenceOrigins(ctx, idx.modStore, idx.schemaStore, modHandle.Path())
+			return module.DecodeReferenceOrigins(ctx, idx.modStore, idx.schemaStore, modHandle.Path(), trace.TraceID{}, trace.SpanID{})
 		},
 		Type:        op.OpTypeDecodeReferenceOrigins.String(),
 		DependsOn:   dependsOn,

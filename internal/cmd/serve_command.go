@@ -7,6 +7,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"runtime"
@@ -20,7 +21,19 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/langserver/handlers"
 	"github.com/hashicorp/terraform-ls/internal/logging"
 	"github.com/hashicorp/terraform-ls/internal/pathtpl"
+	"github.com/honeycombio/honeycomb-opentelemetry-go"
+	"github.com/honeycombio/otel-config-go/otelconfig"
+
 	"github.com/mitchellh/cli"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/sdk/resource"
+
+	// "go.opentelemetry.io/otel/sdk/trace"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+
+	// "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.17.0"
 )
 
 type ServeCommand struct {
@@ -108,6 +121,76 @@ func (c *ServeCommand) Run(args []string) int {
 		ctx = algolia.WithCredentials(ctx, c.AlgoliaAppID, c.AlgoliaAPIKey)
 	}
 
+	// Write telemetry data to a file.
+	// fl, err := os.Create("traces.txt")
+	// if err != nil {
+	// 	logger.Fatal(err)
+	// }
+	// defer fl.Close()
+
+	// exp, err := newExporter(fl)
+	// if err != nil {
+	// 	logger.Fatal(err)
+	// }
+
+	// tp := sdktrace.NewTracerProvider(
+	// 	sdktrace.WithBatcher(exp),
+	// 	sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	// 	sdktrace.WithResource(newResource()),
+	// )
+
+	// otel.SetTracerProvider(tp)
+
+	// use honeycomb distro to setup OpenTelemetry SD
+	// apikey, apikeyPresent := os.LookupEnv("HONEYCOMB_API_KEY")
+	// if apikeyPresent && !strings.HasPrefix(apikey, "your") {
+	// 	// serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
+	// 	serviceName := "terraform-ls"
+	// 	logger.Printf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName)
+
+	//   bsp := honeycomb.NewBaggageSpanProcessor()
+	// 	// otelShutdown, err := launcher.ConfigureOpenTelemetry(
+	// 	// 	honeycomb.WithApiKey(apikey),
+	// 	// 	launcher.WithServiceName(serviceName),
+	// 	// 	// launcher.WithPropagators(otel.GetTextMapPropagator()),
+	// 	// 	// launcher.WithPropagators(otel.SetTextMapPropagator(propagation.TraceContext{})),
+	// 	// )
+
+	// 	otelShutdown, err := otelconfig.ConfigureOpenTelemetry(
+	// 		// honeycomb.WithApiKey(apikey),
+	// 		// otelconfig.with
+	// 		// otelconfig.WithServiceName(serviceName),
+	// 		otelconfig.WithSpanProcessor(bsp),
+	// 		// launcher.WithPropagators(otel.GetTextMapPropagator()),
+	// 		// launcher.WithPropagators(otel.SetTextMapPropagator(propagation.TraceContext{})),
+	// 		otelconfig.WithLogLevel("debug"),
+
+	// 	)
+	// 	if err != nil {
+	// 		logger.Fatalf("error setting up OTel SDK - %e", err)
+	// 	}
+	// 	defer otelShutdown()
+	// } else {
+	// 	logger.Printf("Honeycomb API key not set - disabling OpenTelemetry")
+	// }
+
+	bsp := honeycomb.NewBaggageSpanProcessor()
+
+	// use honeycomb distro to setup OpenTelemetry SDK
+	otelShutdown, err := otelconfig.ConfigureOpenTelemetry(
+		otelconfig.WithSpanProcessor(bsp),
+		otelconfig.WithServiceName("terraform-ls"),
+		otelconfig.WithLogLevel("debug"),
+		otelconfig.WithExporterEndpoint("api.honeycomb.io:443"),
+		otelconfig.WithHeaders(map[string]string{
+			"x-honeycomb-team": "8h8IjatgouQcBhdRyfDiaB",
+		}),
+	)
+	if err != nil {
+		log.Fatalf("error setting up OTel SDK - %e", err)
+	}
+	defer otelShutdown()
+
 	srv := langserver.NewLangServer(ctx, handlers.NewSession)
 	srv.SetLogger(logger)
 
@@ -120,7 +203,7 @@ func (c *ServeCommand) Run(args []string) int {
 		return 0
 	}
 
-	err := srv.StartAndWait(os.Stdin, os.Stdout)
+	err = srv.StartAndWait(os.Stdin, os.Stdout)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Failed to start server: %s", err))
 		return 1
@@ -183,4 +266,29 @@ Usage: terraform-ls serve [options]
 
 func (c *ServeCommand) Synopsis() string {
 	return "Starts the Language Server"
+}
+
+// newExporter returns a console exporter.
+func newExporter(w io.Writer) (sdktrace.SpanExporter, error) {
+	return stdouttrace.New(
+		stdouttrace.WithWriter(w),
+		// Use human-readable output.
+		stdouttrace.WithPrettyPrint(),
+		// Do not print timestamps for the demo.
+		// stdouttrace.WithoutTimestamps(),
+	)
+}
+
+// newResource returns a resource describing this application.
+func newResource() *resource.Resource {
+	r, _ := resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName("fib"),
+			semconv.ServiceVersion("v0.1.0"),
+			attribute.String("environment", "demo"),
+		),
+	)
+	return r
 }

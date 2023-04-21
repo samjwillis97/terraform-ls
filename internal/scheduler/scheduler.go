@@ -6,11 +6,16 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 
 	"github.com/hashicorp/terraform-ls/internal/job"
+	"go.opentelemetry.io/otel"
+	// "go.opentelemetry.io/otel"
 )
+
+const tracerName = "github.com/hashicorp/terraform-ls/internal/scheduler"
 
 type Scheduler struct {
 	logger      *log.Logger
@@ -43,11 +48,19 @@ func (s *Scheduler) SetLogger(logger *log.Logger) {
 }
 
 func (s *Scheduler) Start(ctx context.Context) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "scheduler_Start")
+	defer span.End()
+	
 	ctx, cancelFunc := context.WithCancel(ctx)
 	s.stopFunc = cancelFunc
 
+	span.AddEvent(fmt.Sprintf("Loading %d processors", s.parallelism))
 	for i := 0; i < s.parallelism; i++ {
+		ctx, span := otel.Tracer(tracerName).Start(ctx, "scheduler_Start_loop")
+		defer span.End()
+
 		s.logger.Printf("launching eval loop %d", i)
+		span.AddEvent(fmt.Sprintf("launching eval loop %d", i))
 		go s.eval(ctx)
 	}
 }
@@ -58,7 +71,13 @@ func (s *Scheduler) Stop() {
 }
 
 func (s *Scheduler) eval(ctx context.Context) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "scheduler_eval")
+	defer span.End()
+	
 	for {
+		ctx, span := otel.Tracer(tracerName).Start(ctx, "scheduler_eval_loop")
+		defer span.End()
+		
 		id, nextJob, err := s.jobStorage.AwaitNextJob(ctx, s.priority)
 		if err != nil {
 			if errors.Is(err, context.Canceled) {

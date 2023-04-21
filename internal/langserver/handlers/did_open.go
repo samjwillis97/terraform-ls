@@ -12,9 +12,13 @@ import (
 	lsp "github.com/hashicorp/terraform-ls/internal/protocol"
 	"github.com/hashicorp/terraform-ls/internal/state"
 	"github.com/hashicorp/terraform-ls/internal/uri"
+	"go.opentelemetry.io/otel"
 )
 
 func (svc *service) TextDocumentDidOpen(ctx context.Context, params lsp.DidOpenTextDocumentParams) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "TextDocumentDidOpen")
+	defer span.End()
+	
 	docURI := string(params.TextDocument.URI)
 
 	// URIs are always checked during initialize request, but
@@ -59,7 +63,7 @@ func (svc *service) TextDocumentDidOpen(ctx context.Context, params lsp.DidOpenT
 	// (originally parsed) content on the disk
 	// TODO: Do this only if we can verify the file differs?
 	modHandle := document.DirHandleFromPath(mod.Path)
-	jobIds, err := svc.indexer.DocumentOpened(modHandle)
+	jobIds, err := svc.indexer.DocumentOpened(ctx, modHandle)
 	if err != nil {
 		return err
 	}

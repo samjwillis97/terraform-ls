@@ -35,7 +35,12 @@ import (
 	tfschema "github.com/hashicorp/terraform-schema/schema"
 	"github.com/zclconf/go-cty/cty"
 	ctyjson "github.com/zclconf/go-cty/cty/json"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
+
+const tracerName = "github.com/hashicorp/terraform-ls/internal/terraform/module"
 
 type DeferFunc func(opError error)
 
@@ -65,8 +70,13 @@ func (mo ModuleOperation) done() <-chan struct{} {
 }
 
 func GetTerraformVersion(ctx context.Context, modStore *state.ModuleStore, modPath string) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "GetTerraformVersion")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -77,6 +87,8 @@ func GetTerraformVersion(ctx context.Context, modStore *state.ModuleStore, modPa
 
 	err = modStore.SetTerraformVersionState(modPath, op.OpStateLoading)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	defer modStore.SetTerraformVersionState(modPath, op.OpStateLoaded)
@@ -85,6 +97,8 @@ func GetTerraformVersion(ctx context.Context, modStore *state.ModuleStore, modPa
 	if err != nil {
 		sErr := modStore.UpdateTerraformAndProviderVersions(modPath, nil, nil, err)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return sErr
 		}
 		return err
@@ -102,6 +116,8 @@ func GetTerraformVersion(ctx context.Context, modStore *state.ModuleStore, modPa
 
 	sErr := modStore.UpdateTerraformAndProviderVersions(modPath, v, pVersions, err)
 	if sErr != nil {
+		span.RecordError(sErr)
+		span.SetStatus(codes.Error, sErr.Error())
 		return sErr
 	}
 
@@ -127,6 +143,9 @@ func providerVersionsFromTfVersion(pv map[string]*version.Version) map[tfaddr.Pr
 }
 
 func ObtainSchema(ctx context.Context, modStore *state.ModuleStore, schemaStore *state.ProviderSchemaStore, modPath string) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "ObtainSchema")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -191,7 +210,19 @@ func ObtainSchema(ctx context.Context, modStore *state.ModuleStore, schemaStore 
 	return nil
 }
 
-func PreloadEmbeddedSchema(ctx context.Context, logger *log.Logger, fs fs.ReadDirFS, modStore *state.ModuleStore, schemaStore *state.ProviderSchemaStore, modPath string) error {
+func PreloadEmbeddedSchema(
+	ctx context.Context,
+	logger *log.Logger,
+	fs fs.ReadDirFS,
+	modStore *state.ModuleStore,
+	schemaStore *state.ProviderSchemaStore,
+	modPath string,
+	traceId trace.TraceID, spanId trace.SpanID,
+) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "PreloadEmbeddedSchema")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -293,7 +324,26 @@ func PreloadEmbeddedSchema(ctx context.Context, logger *log.Logger, fs fs.ReadDi
 	return nil
 }
 
-func ParseModuleConfiguration(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleStore, modPath string) error {
+func getOtelContext(traceId trace.TraceID, spanId trace.SpanID, ctx context.Context) context.Context {
+	var spanContextConfig trace.SpanContextConfig
+	spanContextConfig.TraceID = traceId
+	spanContextConfig.SpanID = spanId
+	spanContextConfig.TraceFlags = 01
+	spanContextConfig.Remote = false
+	spanContext := trace.NewSpanContext(spanContextConfig)
+
+	requestContext := trace.ContextWithSpanContext(ctx, spanContext)
+	return requestContext
+}
+
+func ParseModuleConfiguration(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleStore, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "ParseModuleConfiguration")
+	defer span.End()
+
+	// spanContext := span.SpanContext().WithSpanID(spanId)
+	// ctx = trace.ContextWithSpanContext(ctx, spanContext)
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -328,7 +378,12 @@ func ParseModuleConfiguration(ctx context.Context, fs ReadOnlyFS, modStore *stat
 	return err
 }
 
-func ParseVariables(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleStore, modPath string) error {
+func ParseVariables(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleStore, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "ParseVariables")
+	defer span.End()
+
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -364,6 +419,9 @@ func ParseVariables(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleSt
 }
 
 func ParseModuleManifest(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleStore, modPath string) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "ParseModuleManifest")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -408,6 +466,9 @@ func ParseModuleManifest(ctx context.Context, fs ReadOnlyFS, modStore *state.Mod
 }
 
 func ParseProviderVersions(ctx context.Context, fs ReadOnlyFS, modStore *state.ModuleStore, modPath string) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "ParseProviderVersions")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -433,7 +494,11 @@ func ParseProviderVersions(ctx context.Context, fs ReadOnlyFS, modStore *state.M
 	return err
 }
 
-func LoadModuleMetadata(ctx context.Context, modStore *state.ModuleStore, modPath string) error {
+func LoadModuleMetadata(ctx context.Context, modStore *state.ModuleStore, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "LoadModuleMetadata")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -478,7 +543,11 @@ func LoadModuleMetadata(ctx context.Context, modStore *state.ModuleStore, modPat
 	return mErr
 }
 
-func DecodeReferenceTargets(ctx context.Context, modStore *state.ModuleStore, schemaReader state.SchemaReader, modPath string) error {
+func DecodeReferenceTargets(ctx context.Context, modStore *state.ModuleStore, schemaReader state.SchemaReader, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "DecodeReferenceTargets")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -521,7 +590,11 @@ func DecodeReferenceTargets(ctx context.Context, modStore *state.ModuleStore, sc
 	return rErr
 }
 
-func DecodeReferenceOrigins(ctx context.Context, modStore *state.ModuleStore, schemaReader state.SchemaReader, modPath string) error {
+func DecodeReferenceOrigins(ctx context.Context, modStore *state.ModuleStore, schemaReader state.SchemaReader, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "DecodeReferenceOrigins")
+	defer span.End()
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -563,7 +636,12 @@ func DecodeReferenceOrigins(ctx context.Context, modStore *state.ModuleStore, sc
 	return rErr
 }
 
-func DecodeVarsReferences(ctx context.Context, modStore *state.ModuleStore, schemaReader state.SchemaReader, modPath string) error {
+func DecodeVarsReferences(ctx context.Context, modStore *state.ModuleStore, schemaReader state.SchemaReader, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "DecodeVarsReferences")
+	defer span.End()
+
+
 	mod, err := modStore.ModuleByPath(modPath)
 	if err != nil {
 		return err
@@ -604,7 +682,11 @@ func DecodeVarsReferences(ctx context.Context, modStore *state.ModuleStore, sche
 	return rErr
 }
 
-func GetModuleDataFromRegistry(ctx context.Context, regClient registry.Client, modStore *state.ModuleStore, modRegStore *state.RegistryModuleStore, modPath string) error {
+func GetModuleDataFromRegistry(ctx context.Context, regClient registry.Client, modStore *state.ModuleStore, modRegStore *state.RegistryModuleStore, modPath string, traceId trace.TraceID, spanId trace.SpanID) error {
+	requestContext := getOtelContext(traceId, spanId, ctx)
+	ctx, span := otel.Tracer(tracerName).Start(requestContext, "GetModuleDataFromRegistry")
+	defer span.End()
+
 	// loop over module calls
 	calls, err := modStore.ModuleCalls(modPath)
 	if err != nil {
@@ -616,6 +698,9 @@ func GetModuleDataFromRegistry(ctx context.Context, regClient registry.Client, m
 	var errs *multierror.Error
 
 	for _, declaredModule := range calls.Declared {
+		ctx, span := otel.Tracer(tracerName).Start(ctx, "GetModuleDataFromRegistry_Loop")
+		defer span.End()
+
 		sourceAddr, ok := declaredModule.SourceAddr.(tfaddr.Module)
 		if !ok {
 			// skip any modules which do not come from the Registry

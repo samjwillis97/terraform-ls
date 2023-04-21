@@ -14,9 +14,13 @@ import (
 	lsp "github.com/hashicorp/terraform-ls/internal/protocol"
 	"github.com/hashicorp/terraform-ls/internal/terraform/exec"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
+	"go.opentelemetry.io/otel"
 )
 
 func (svc *service) TextDocumentFormatting(ctx context.Context, params lsp.DocumentFormattingParams) ([]lsp.TextEdit, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "TextDocumentFormatting")
+	defer span.End()
+	
 	var edits []lsp.TextEdit
 
 	dh := ilsp.HandleFromDocumentURI(params.TextDocument.URI)

@@ -21,6 +21,7 @@ import (
 	idecoder "github.com/hashicorp/terraform-ls/internal/decoder"
 	"github.com/hashicorp/terraform-ls/internal/state"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestDecoder_CodeLensesForFile_concurrencyBug(t *testing.T) {
@@ -60,15 +61,15 @@ func TestDecoder_CodeLensesForFile_concurrencyBug(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		err = module.ParseModuleConfiguration(ctx, mapFs, ss.Modules, dirName)
+		err = module.ParseModuleConfiguration(ctx, mapFs, ss.Modules, dirName, trace.TraceID{}, trace.SpanID{})
 		if err != nil {
 			t.Error(err)
 		}
-		err = module.LoadModuleMetadata(ctx, ss.Modules, dirName)
+		err = module.LoadModuleMetadata(ctx, ss.Modules, dirName, trace.TraceID{}, trace.SpanID{})
 		if err != nil {
 			t.Error(err)
 		}
-		err = module.PreloadEmbeddedSchema(ctx, logger, schemasFs, ss.Modules, ss.ProviderSchemas, dirName)
+		err = module.PreloadEmbeddedSchema(ctx, logger, schemasFs, ss.Modules, ss.ProviderSchemas, dirName, trace.TraceID{}, trace.SpanID{})
 	}
 
 	d := decoder.NewDecoder(&idecoder.PathReader{

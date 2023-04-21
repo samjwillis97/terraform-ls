@@ -14,6 +14,7 @@ import (
 	"github.com/hashicorp/go-memdb"
 	"github.com/hashicorp/terraform-ls/internal/document"
 	"github.com/hashicorp/terraform-ls/internal/job"
+	"go.opentelemetry.io/otel"
 )
 
 type JobStore struct {
@@ -59,6 +60,8 @@ const (
 	StateRunning
 	StateDone
 )
+
+const tracerName = "github.com/hashicorp/terraform-ls/internal/state"
 
 func (js *JobStore) EnqueueJob(newJob job.Job) (job.ID, error) {
 	txn := js.db.Txn(true)
@@ -211,6 +214,9 @@ func (js *JobStore) jobExists(j job.Job, state State) (job.ID, bool, error) {
 }
 
 func (js *JobStore) AwaitNextJob(ctx context.Context, priority job.JobPriority) (job.ID, job.Job, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "AwaitNextJob")
+	defer span.End()
+	
 	// Locking is needed if same query is executed in multiple threads,
 	// i.e. this method is called at the same time from different threads, at
 	// which point txn.FirstWatch would return the same job to more than
@@ -231,8 +237,14 @@ func (js *JobStore) AwaitNextJob(ctx context.Context, priority job.JobPriority) 
 }
 
 func (js *JobStore) awaitNextJob(ctx context.Context, priority job.JobPriority) (job.ID, job.Job, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "awaitNextJob")
+	defer span.End()
+	
 	var sJob *ScheduledJob
 	for {
+		ctx, span := otel.Tracer(tracerName).Start(ctx, "awaitNextJob_loop")
+		defer span.End()
+		
 		txn := js.db.Txn(false)
 		wCh, obj, err := txn.FirstWatch(js.tableName, "priority_dependecies_state", priority, 0, StateQueued)
 		if err != nil {
@@ -283,6 +295,11 @@ func isDirOpen(txn *memdb.Txn, dirHandle document.DirHandle) bool {
 }
 
 func (js *JobStore) WaitForJobs(ctx context.Context, ids ...job.ID) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "WaitForJobs")
+	defer span.End()
+	
+	span.AddEvent(fmt.Sprintf("Waiting for %d Jobs", len(ids)))
+	
 	if len(ids) == 0 {
 		return nil
 	}
@@ -303,6 +320,7 @@ func (js *JobStore) WaitForJobs(ctx context.Context, ids ...job.ID) error {
 			deferredJobIds = append(deferredJobIds, ids...)
 		}
 
+		span.AddEvent(fmt.Sprintf("Waiting for %d deferred Jobs", len(deferredJobIds)))
 		err := js.WaitForJobs(ctx, deferredJobIds...)
 		if err != nil {
 			js.logger.Printf("error waiting for %d deferred jobs: %s", len(deferredJobIds), err)
@@ -319,6 +337,11 @@ func (js *JobStore) WaitForJobs(ctx context.Context, ids ...job.ID) error {
 }
 
 func (js *JobStore) waitForJobId(ctx context.Context, id job.ID) (job.IDs, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "WaitForJobs")
+	defer span.End()
+	
+	span.AddEvent(fmt.Sprintf("Waiting for %q job", id))
+	
 	txn := js.db.Txn(false)
 
 	wCh, obj, err := txn.FirstWatch(js.tableName, "id", id)

@@ -17,9 +17,13 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/settings"
 	"github.com/hashicorp/terraform-ls/internal/uri"
 	"github.com/mitchellh/go-homedir"
+	"go.opentelemetry.io/otel"
 )
 
 func (svc *service) Initialize(ctx context.Context, params lsp.InitializeParams) (lsp.InitializeResult, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "TextDocumentDidChange")
+	defer span.End()
+	
 	serverCaps := initializeResult(ctx)
 
 	out, err := settings.DecodeOptions(params.InitializationOptions)

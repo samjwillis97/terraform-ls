@@ -121,75 +121,30 @@ func (c *ServeCommand) Run(args []string) int {
 		ctx = algolia.WithCredentials(ctx, c.AlgoliaAppID, c.AlgoliaAPIKey)
 	}
 
-	// Write telemetry data to a file.
-	// fl, err := os.Create("traces.txt")
-	// if err != nil {
-	// 	logger.Fatal(err)
-	// }
-	// defer fl.Close()
-
-	// exp, err := newExporter(fl)
-	// if err != nil {
-	// 	logger.Fatal(err)
-	// }
-
-	// tp := sdktrace.NewTracerProvider(
-	// 	sdktrace.WithBatcher(exp),
-	// 	sdktrace.WithSampler(sdktrace.AlwaysSample()),
-	// 	sdktrace.WithResource(newResource()),
-	// )
-
-	// otel.SetTracerProvider(tp)
-
 	// use honeycomb distro to setup OpenTelemetry SD
-	// apikey, apikeyPresent := os.LookupEnv("HONEYCOMB_API_KEY")
-	// if apikeyPresent && !strings.HasPrefix(apikey, "your") {
-	// 	// serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
-	// 	serviceName := "terraform-ls"
-	// 	logger.Printf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName)
+	apikey, apikeyPresent := os.LookupEnv("HONEYCOMB_API_KEY")
+	if apikeyPresent && !strings.HasPrefix(apikey, "your") {
+		// serviceName, _ := os.LookupEnv("OTEL_SERVICE_NAME")
+		serviceName := "terraform-ls"
+		logger.Printf("Sending to Honeycomb with API Key <%s> and service name %s\n", apikey, serviceName)
 
-	//   bsp := honeycomb.NewBaggageSpanProcessor()
-	// 	// otelShutdown, err := launcher.ConfigureOpenTelemetry(
-	// 	// 	honeycomb.WithApiKey(apikey),
-	// 	// 	launcher.WithServiceName(serviceName),
-	// 	// 	// launcher.WithPropagators(otel.GetTextMapPropagator()),
-	// 	// 	// launcher.WithPropagators(otel.SetTextMapPropagator(propagation.TraceContext{})),
-	// 	// )
-
-	// 	otelShutdown, err := otelconfig.ConfigureOpenTelemetry(
-	// 		// honeycomb.WithApiKey(apikey),
-	// 		// otelconfig.with
-	// 		// otelconfig.WithServiceName(serviceName),
-	// 		otelconfig.WithSpanProcessor(bsp),
-	// 		// launcher.WithPropagators(otel.GetTextMapPropagator()),
-	// 		// launcher.WithPropagators(otel.SetTextMapPropagator(propagation.TraceContext{})),
-	// 		otelconfig.WithLogLevel("debug"),
-
-	// 	)
-	// 	if err != nil {
-	// 		logger.Fatalf("error setting up OTel SDK - %e", err)
-	// 	}
-	// 	defer otelShutdown()
-	// } else {
-	// 	logger.Printf("Honeycomb API key not set - disabling OpenTelemetry")
-	// }
-
-	bsp := honeycomb.NewBaggageSpanProcessor()
-
-	// use honeycomb distro to setup OpenTelemetry SDK
-	otelShutdown, err := otelconfig.ConfigureOpenTelemetry(
-		otelconfig.WithSpanProcessor(bsp),
-		otelconfig.WithServiceName("terraform-ls"),
-		otelconfig.WithLogLevel("debug"),
-		otelconfig.WithExporterEndpoint("api.honeycomb.io:443"),
-		otelconfig.WithHeaders(map[string]string{
-			"x-honeycomb-team": "8h8IjatgouQcBhdRyfDiaB",
-		}),
-	)
-	if err != nil {
-		log.Fatalf("error setting up OTel SDK - %e", err)
+		bsp := honeycomb.NewBaggageSpanProcessor()
+		otelShutdown, err := otelconfig.ConfigureOpenTelemetry(
+			otelconfig.WithSpanProcessor(bsp),
+			otelconfig.WithServiceName("terraform-ls"),
+			otelconfig.WithLogLevel("debug"),
+			otelconfig.WithExporterEndpoint("api.honeycomb.io:443"),
+			otelconfig.WithHeaders(map[string]string{
+				"x-honeycomb-team": apikey,
+			}),
+		)
+		if err != nil {
+			logger.Fatalf("error setting up OTel SDK - %e", err)
+		}
+		defer otelShutdown()
+	} else {
+		logger.Printf("Honeycomb API key not set - disabling OpenTelemetry")
 	}
-	defer otelShutdown()
 
 	srv := langserver.NewLangServer(ctx, handlers.NewSession)
 	srv.SetLogger(logger)
@@ -203,7 +158,7 @@ func (c *ServeCommand) Run(args []string) int {
 		return 0
 	}
 
-	err = srv.StartAndWait(os.Stdin, os.Stdout)
+	err := srv.StartAndWait(os.Stdin, os.Stdout)
 	if err != nil {
 		c.Ui.Error(fmt.Sprintf("Failed to start server: %s", err))
 		return 1

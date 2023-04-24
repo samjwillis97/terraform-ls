@@ -11,9 +11,13 @@ import (
 	ilsp "github.com/hashicorp/terraform-ls/internal/lsp"
 	lsp "github.com/hashicorp/terraform-ls/internal/protocol"
 	"github.com/hashicorp/terraform-ls/internal/terraform/datadir"
+	"go.opentelemetry.io/otel"
 )
 
 func (svc *service) Initialized(ctx context.Context, params lsp.InitializedParams) error {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "TextDocumentDidChange")
+	defer span.End()
+	
 	caps, err := ilsp.ClientCapabilities(ctx)
 	if err != nil {
 		return err

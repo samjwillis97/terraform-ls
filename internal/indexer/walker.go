@@ -14,10 +14,14 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/terraform/exec"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
 	op "github.com/hashicorp/terraform-ls/internal/terraform/module/operation"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
 func (idx *Indexer) WalkedModule(ctx context.Context, modHandle document.DirHandle) (job.IDs, error) {
+	_, span := otel.Tracer(tracerName).Start(ctx, "WalkedModule")
+	defer span.End()
+	
 	ids := make(job.IDs, 0)
 	var errs *multierror.Error
 

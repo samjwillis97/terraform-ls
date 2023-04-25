@@ -12,10 +12,14 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/terraform/exec"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
 	op "github.com/hashicorp/terraform-ls/internal/terraform/module/operation"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/trace"
 )
 
 func (idx *Indexer) DocumentOpened(ctx context.Context, modHandle document.DirHandle) (job.IDs, error) {
+	_, span := otel.Tracer(tracerName).Start(ctx, "PluginLockChanged")
+	defer span.End()
+	
 	mod, err := idx.modStore.ModuleByPath(modHandle.Path())
 	if err != nil {
 		return nil, err

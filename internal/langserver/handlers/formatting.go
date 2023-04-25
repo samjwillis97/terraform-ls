@@ -44,6 +44,9 @@ func (svc *service) TextDocumentFormatting(ctx context.Context, params lsp.Docum
 }
 
 func (svc *service) formatDocument(ctx context.Context, tfExec exec.TerraformExecutor, original []byte, dh document.Handle) ([]lsp.TextEdit, error) {
+	ctx, span := otel.Tracer(tracerName).Start(ctx, "formatDocument")
+	defer span.End()
+	
 	var edits []lsp.TextEdit
 
 	svc.logger.Printf("formatting document via %q", tfExec.GetExecPath())

@@ -12,9 +12,13 @@ import (
 	"github.com/hashicorp/terraform-ls/internal/terraform/exec"
 	"github.com/hashicorp/terraform-ls/internal/terraform/module"
 	op "github.com/hashicorp/terraform-ls/internal/terraform/module/operation"
+	"go.opentelemetry.io/otel"
 )
 
 func (idx *Indexer) ModuleManifestChanged(ctx context.Context, modHandle document.DirHandle) (job.IDs, error) {
+	_, span := otel.Tracer(tracerName).Start(ctx, "ModuleManifestChanged")
+	defer span.End()
+	
 	ids := make(job.IDs, 0)
 
 	modManifestId, err := idx.jobStore.EnqueueJob(job.Job{
@@ -37,6 +41,9 @@ func (idx *Indexer) ModuleManifestChanged(ctx context.Context, modHandle documen
 }
 
 func (idx *Indexer) PluginLockChanged(ctx context.Context, modHandle document.DirHandle) (job.IDs, error) {
+	_, span := otel.Tracer(tracerName).Start(ctx, "PluginLockChanged")
+	defer span.End()
+	
 	ids := make(job.IDs, 0)
 	dependsOn := make(job.IDs, 0)
 	var errs *multierror.Error

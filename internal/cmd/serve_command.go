@@ -131,7 +131,7 @@ func (c *ServeCommand) Run(args []string) int {
 		bsp := honeycomb.NewBaggageSpanProcessor()
 		otelShutdown, err := otelconfig.ConfigureOpenTelemetry(
 			otelconfig.WithSpanProcessor(bsp),
-			otelconfig.WithServiceName("terraform-ls"),
+			otelconfig.WithServiceName(serviceName),
 			otelconfig.WithLogLevel("debug"),
 			otelconfig.WithExporterEndpoint("api.honeycomb.io:443"),
 			otelconfig.WithHeaders(map[string]string{
